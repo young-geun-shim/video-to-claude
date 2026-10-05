@@ -36,6 +36,26 @@ REFERENCES_GLOB = "references/*.md"
 
 REF_PATH_RE = re.compile(r"references/([^`\s'\"]+)")
 SCRIPT_PATH_RE = re.compile(r"scripts/([^`\s'\"]+)")
+BARE_FILE_RE = re.compile(r"`([^`/\\]+?\.(?:md|py|sh))`")
+
+# 작업 폴더에 실행 중 생기는 이름 · 사용자 환경 파일(저장소에 없는 것)
+RULE2_ALLOWLIST = frozenset(
+    {
+        "video-to-claude.local.md",
+        "CLAUDE.md",
+        "스킬개선_기록.md",
+        "자막_전문.md",
+        "영상_전체텍스트.md",
+        "읽기용.md",
+        "읽기용_1부.md",
+        "발표자방법.md",
+        "항목표.md",
+        "항목표_1부.md",
+        "인터뷰_중간.md",
+        "여럿_비교표.md",
+        "앞으로_이렇게_쓰세요.md",
+    }
+)
 
 # README 꺾쇠 자리 표시용 /home/<...>/ 는 규칙3에서 제외
 README_HOME_PLACEHOLDER_RE = re.compile(r"/+home/<[^>]+>/")
@@ -121,36 +141,63 @@ def md_files_for_rule2(root: Path) -> list[Path]:
     return files
 
 
+def _rule2_normalize_name(raw: str) -> str:
+    return raw.rstrip(").,;:")
+
+
+def _rule2_skip_bare(name: str) -> bool:
+    if name in RULE2_ALLOWLIST:
+        return True
+    if "*" in name or "{" in name or "<" in name or "YYYYMMDD" in name:
+        return True
+    return False
+
+
+def _rule2_resolve_file(root: Path, name: str) -> Path | None:
+    for base in (root / "references", root / "scripts", root):
+        candidate = base / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def check_rule2_file_references(root: Path) -> list[str]:
     errors: list[str] = []
     for md_path in md_files_for_rule2(root):
         text = md_path.read_text(encoding="utf-8")
         rel_md = md_path.relative_to(root)
         for m in REF_PATH_RE.finditer(text):
-            name = m.group(1).rstrip(").,;:")
+            name = _rule2_normalize_name(m.group(1))
             target = root / "references" / name
             if not target.is_file():
                 errors.append(
                     f"규칙2 {rel_md}: references/{name} 파일 없음"
                 )
         for m in SCRIPT_PATH_RE.finditer(text):
-            name = m.group(1).rstrip(").,;:")
+            name = _rule2_normalize_name(m.group(1))
             target = root / "scripts" / name
             if not target.is_file():
                 errors.append(
                     f"규칙2 {rel_md}: scripts/{name} 파일 없음"
                 )
+        for m in BARE_FILE_RE.finditer(text):
+            name = _rule2_normalize_name(m.group(1))
+            if _rule2_skip_bare(name):
+                continue
+            if _rule2_resolve_file(root, name) is None:
+                errors.append(f"규칙2 {rel_md}: {name} 파일 없음")
     return errors
 
 
 def _rule3_patterns() -> list[tuple[str, re.Pattern[str]]]:
     mnt_users = "/" + "mnt" + "/c/Users/"
-    win_users = "C:" + "\\" + "Users" + "\\"
+    win_users_bs = "C:" + "\\" + "Users" + "\\"
     gmail = "@" + "gmail.com"
     return [
         ("개인 홈 경로", re.compile(r"/home/[^/\s<>]+/")),
         ("WSL 사용자 경로", re.compile(mnt_users)),
-        ("Windows 사용자 경로", re.compile(re.escape(win_users))),
+        ("Windows 사용자 경로(역슬래시)", re.compile(re.escape(win_users_bs), re.IGNORECASE)),
+        ("Windows 사용자 경로(슬래시)", re.compile(r"[cC]:/Users/", re.IGNORECASE)),
         ("gmail 주소", re.compile(re.escape(gmail))),
     ]
 
@@ -214,59 +261,93 @@ def run_all_checks(root: Path) -> list[str]:
     return errors
 
 
-def _assert_fails(root: Path, label: str) -> None:
+def _copy_rule_fixtures(troot: Path, root: Path) -> None:
+    shutil.copytree(root / "scripts", troot / "scripts")
+    shutil.copytree(root / "references", troot / "references")
+    shutil.copy(root / "SKILL.md", troot / "SKILL.md")
+    shutil.copy(root / "README.md", troot / "README.md")
+
+
+def _assert_rule_errors(
+    root: Path,
+    label: str,
+    rule_num: int,
+    label_substr: str | None = None,
+) -> None:
+    prefix = f"규칙{rule_num}"
     errs = run_all_checks(root)
-    if not errs:
-        raise AssertionError(f"일부러 어긴 보기({label})인데 검사가 통과함")
+    matched = [e for e in errs if e.startswith(prefix)]
+    if not matched:
+        raise AssertionError(
+            f"일부러 어긴 보기({label}): {prefix} 오류 없음 — 전체={errs!r}"
+        )
+    if label_substr is not None and not any(label_substr in e for e in matched):
+        raise AssertionError(
+            f"일부러 어긴 보기({label}): '{label_substr}' 없음 — {matched!r}"
+        )
 
 
 def run_negative_self_tests() -> None:
     """일부러 어긴 보기로 각 규칙 검사가 실패를 잡는지 확인한다."""
     root = repo_root()
 
-    # 일부러 어긴 — 규칙1 scripts 불러오기
     with tempfile.TemporaryDirectory() as tmp:
         troot = Path(tmp)
-        shutil.copytree(root / "scripts", troot / "scripts")
-        shutil.copytree(root / "references", troot / "references")
-        shutil.copy(root / "SKILL.md", troot / "SKILL.md")
-        shutil.copy(root / "README.md", troot / "README.md")
+        _copy_rule_fixtures(troot, root)
         bad_py = troot / "scripts" / "bad_import.py"
         bad_py.write_text(
             "# 일부러 어긴 규칙1 검사용\nimport references\n",
             encoding="utf-8",
         )
-        _assert_fails(troot, "규칙1")
+        _assert_rule_errors(troot, "규칙1 import", 1, "허용되지 않은 불러오기")
 
     with tempfile.TemporaryDirectory() as tmp:
         troot = Path(tmp)
-        shutil.copytree(root / "scripts", troot / "scripts")
-        shutil.copytree(root / "references", troot / "references")
-        shutil.copy(root / "SKILL.md", troot / "SKILL.md")
+        _copy_rule_fixtures(troot, root)
         readme = (root / "README.md").read_text(encoding="utf-8")
         readme += "\n`scripts/없는파일_일부러어긴.py`\n"
         (troot / "README.md").write_text(readme, encoding="utf-8")
-        _assert_fails(troot, "규칙2")
+        _assert_rule_errors(troot, "규칙2 scripts 경로", 2, "scripts/없는파일")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        troot = Path(tmp)
+        _copy_rule_fixtures(troot, root)
+        skill = (root / "SKILL.md").read_text(encoding="utf-8")
+        skill = skill.replace("`길_고르기.md`", "`없는파일_일부러어긴.md`", 1)
+        (troot / "SKILL.md").write_text(skill, encoding="utf-8")
+        _assert_rule_errors(
+            troot, "규칙2 폴더 없는 이름", 2, "없는파일_일부러어긴.md"
+        )
+
+    rule3_cases = [
+        ("규칙3 개인 홈", "/home/someuser/leak\n", "개인 홈 경로"),
+        (
+            "규칙3 WSL",
+            "/" + "mnt" + "/c/Users/x/leak\n",
+            "WSL 사용자 경로",
+        ),
+        (
+            "규칙3 Windows 역슬래시",
+            "C:" + "\\" + "Users\\x\\leak\n",
+            "Windows 사용자 경로(역슬래시)",
+        ),
+        ("규칙3 Windows 슬래시", "C:/Users/x/leak\n", "Windows 사용자 경로(슬래시)"),
+        ("규칙3 gmail", "contact" + "@gmail.com\n", "gmail 주소"),
+    ]
+    for case_label, leak_text, pattern_label in rule3_cases:
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            _copy_rule_fixtures(troot, root)
+            (troot / "leak.md").write_text(leak_text, encoding="utf-8")
+            _assert_rule_errors(troot, case_label, 3, pattern_label)
 
     with tempfile.TemporaryDirectory() as tmp:
         troot = Path(tmp)
         shutil.copytree(root / "scripts", troot / "scripts")
         shutil.copytree(root / "references", troot / "references")
-        shutil.copy(root / "SKILL.md", troot / "SKILL.md")
         shutil.copy(root / "README.md", troot / "README.md")
-        leak = troot / "leak.md"
-        # 일부러 어긴 규칙3 — 금지 경로 조각을 이어 붙임
-        leak.write_text("/" + "mnt" + "/c/Users/x/leak\n", encoding="utf-8")
-        _assert_fails(troot, "규칙3")
-
-    with tempfile.TemporaryDirectory() as tmp:
-        troot = Path(tmp)
-        shutil.copytree(root / "scripts", troot / "scripts")
-        shutil.copytree(root / "references", troot / "references")
-        shutil.copy(root / "README.md", troot / "README.md")
-        # 일부러 어긴 규칙4 — SKILL 머리막 없음
         (troot / "SKILL.md").write_text("# no frontmatter\n", encoding="utf-8")
-        _assert_fails(troot, "규칙4")
+        _assert_rule_errors(troot, "규칙4 머리막", 4, "규칙4 SKILL.md")
 
 
 def main() -> None:
