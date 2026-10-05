@@ -21,7 +21,7 @@ USER_LANG = _lang if _lang else "ko"
 
 
 def base(code):
-    return (code or "").split("-")[0].lower()
+    return (code or "").replace("_", "-").split("-")[0].lower()
 
 
 def _fallback_speech(meta):
@@ -137,10 +137,10 @@ def main():
                     picked.setdefault(code, KIND_SPEECH)
         else:
             # 원래 음성 언어도 영상 언어도 모르면 사용자 언어가 아닌 첫 자동 자막을 발화 원문으로 본다(사용자 언어 쪽은 자동 번역일 수 있다).
-            for code in auto:
-                if base(code) != USER_LANG:
-                    picked.setdefault(code, KIND_SPEECH)
-                    break
+            # 자동 자막이 사용자 언어뿐이면 그 자막이 원문이므로 그것을 고른다.
+            others = [code for code in auto if base(code) != USER_LANG]
+            for code in (others or list(auto))[:1]:
+                picked.setdefault(code, KIND_SPEECH)
 
     # 자동 번역은 먼저 받는 목록에 넣지 않는다. 429 가 그 자막에서 난다(yt-dlp 이슈 13831).
     # 사람 자막이 사용자 언어에 없을 때만 나중 한 번 시도로 남긴다. 이름표는 「자동 번역」.
