@@ -15,8 +15,8 @@ from common import KIND_AUTO_TRANS, KIND_MANUAL  # noqa: E402
 KIND_SPEECH = "발화 원문"
 KIND_DUB = "자동 더빙 받아쓰기"
 DUB_KEEP = {"ko", "en"}
-# 사용자가 읽는 언어. 환경 변수 VIDEO_TO_CLAUDE_LANG(앞뒤 공백 제거·소문자)이 있으면 그 값, 없으면 ko.
-_lang = (os.environ.get("VIDEO_TO_CLAUDE_LANG") or "").strip().lower()
+# 사용자가 읽는 언어. 환경 변수 VIDEO_TO_CLAUDE_LANG(앞뒤 공백 제거·소문자, ko-KR 같은 지역 꼴은 앞 두 글자 ko)이 있으면 그 값, 없으면 ko.
+_lang = (os.environ.get("VIDEO_TO_CLAUDE_LANG") or "").strip().lower().split("-")[0]
 USER_LANG = _lang if _lang else "ko"
 
 
@@ -75,7 +75,7 @@ def later_auto_trans(picked, manual, auto, user=USER_LANG):
         manual = {}
     if any(base(c) == user for c in manual):
         return {}
-    if user in picked:
+    if any(base(c) == user for c in picked):
         return {}
     return {user: KIND_AUTO_TRANS}
 
@@ -102,8 +102,8 @@ def main():
         sys.stderr.write("[경고] 이 영상 정보에 자막이 하나도 없다\n")
 
     picked = {}
-    # 사람이 단 자막 — 한국어·영어·영상 언어·원래 음성 언어만(수십 개 언어가 달린 영상이 있다)
-    keep_manual = {"ko", "en", video_lang} | speech
+    # 사람이 단 자막 — 사용자 언어·한국어·영어·영상 언어·원래 음성 언어만(수십 개 언어가 달린 영상이 있다)
+    keep_manual = {USER_LANG, "ko", "en", video_lang} | speech
     for code in manual:
         if base(code) in keep_manual:
             picked[code] = KIND_MANUAL

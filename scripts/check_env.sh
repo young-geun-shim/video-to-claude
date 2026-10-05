@@ -48,7 +48,12 @@ elif PYTHONPATH="${PYFIX}${PYTHONPATH:+:$PYTHONPATH}" python3 -c 'import paddleo
   pass "paddleocr 불러오기 — PYTHONPATH 에 ${PYFIX} 를 넣고 다시 불렀다"
 else
   last="$(tail -n 1 "$ERR" 2>/dev/null || true)"
-  echo "알림  paddleocr 없음 — 화면 글자 인식을 할 때 필요하다. 설치 명령 = python3 -m pip install --user -r \"${SKILL_ROOT}/requirements-ocr.txt\"${last:+ — }${last}"
+  if printf '%s' "$last" | grep -qi "urllib3\|requests"; then
+    echo "알림  paddleocr 는 있으나 urllib3 계열 오류로 못 불렀다 — ${last}"
+    echo "고치는 명령 = python3 -m pip install --target \"${PYFIX}\" 'urllib3>=2' requests (사용자 파이썬 부품 폴더 ~/.local 은 고치지 않는다)"
+  else
+    echo "알림  paddleocr 없음 — 화면 글자 인식을 할 때 필요하다. 설치 명령 = python3 -m pip install --user -r \"${SKILL_ROOT}/requirements-ocr.txt\"${last:+ — }${last}"
+  fi
 fi
 rm -f "$ERR"
 

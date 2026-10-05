@@ -100,8 +100,10 @@ import sys
 import urllib.parse
 
 url = sys.argv[1].strip()
+if "://" not in url:
+    url = "https://" + url
 u = urllib.parse.urlparse(url)
-host = (u.netloc or "").lower()
+host = (u.hostname or "").lower()
 if host.startswith("www."):
     host = host[4:]
 is_yt = host in (
@@ -170,7 +172,7 @@ PY
 )"
 if [ -n "$note" ]; then
   log "$note"
-  echo "$(TZ=Asia/Seoul date '+%H:%M:%S KST') $note" >> "$OUT/원본자막/받기기록.txt"
+  echo "$(date '+%H:%M:%S %Z') $note" >> "$OUT/원본자막/받기기록.txt"
 fi
 
 # 2. 영상 정보(이미 받았으면 다시 받지 않는다). 크기만이 아니라 JSON 으로 읽히고 id 가 있어야 한다.
@@ -283,7 +285,7 @@ else
     [ -z "$MISSING" ] && break
     [ "$WAIT" -gt 0 ] && { log "429 등으로 막혀 ${WAIT}초 쉬고 다시"; sleep "$WAIT"; }
     log "받을 자막 = $MISSING"
-    echo "── ${try_n}번째 시도 $(TZ=Asia/Seoul date '+%H:%M:%S KST') ──" >> "$OUT/원본자막/받기기록.txt"
+    echo "── ${try_n}번째 시도 $(date '+%H:%M:%S %Z') ──" >> "$OUT/원본자막/받기기록.txt"
     sub_try="$(mktemp /tmp/v2c_sub.XXXXXX)"
     sub_rc=0
     "$YT" "${JS[@]}" "${NO_PLAYLIST[@]}" --skip-download --write-subs --write-auto-subs --sleep-subtitles 3 \
@@ -348,7 +350,7 @@ if [ -n "$later_lang" ]; then
     log "자동 번역 자막은 이미 받아 두었다 — 다시 받지 않는다"
   else
     log "자동 번역 자막 한 번 시도 = $later_lang"
-    echo "── 자동번역 1번째 시도 $(TZ=Asia/Seoul date '+%H:%M:%S KST') ──" >> "$OUT/원본자막/받기기록.txt"
+    echo "── 자동번역 1번째 시도 $(date '+%H:%M:%S %Z') ──" >> "$OUT/원본자막/받기기록.txt"
     sub_try="$(mktemp /tmp/v2c_sub.XXXXXX)"
     sub_rc=0
     "$YT" "${JS[@]}" "${NO_PLAYLIST[@]}" --skip-download --write-subs --write-auto-subs --sleep-subtitles 3 \
@@ -396,7 +398,7 @@ if [ "$WANT_VIDEO" -eq 1 ]; then
       [ "$WAIT" -gt 0 ] && { log "막혀서 ${WAIT}초 쉬고 다시"; sleep "$WAIT"; }
       log "720p 영상 받는 중"
       # H.264(avc1) 를 먼저 고른다 — AV1 은 이 컴퓨터의 OpenCV 가 못 푼다(2026-09-11 실측 = 장면 0장)
-      echo "── ${try_n}번째 시도 $(TZ=Asia/Seoul date '+%H:%M:%S KST') ──" >> "$OUT/원본영상/받기기록.txt"
+      echo "── ${try_n}번째 시도 $(date '+%H:%M:%S %Z') ──" >> "$OUT/원본영상/받기기록.txt"
       vid_try="$(mktemp /tmp/v2c_vid.XXXXXX)"
       if "$YT" "${JS[@]}" "${NO_PLAYLIST[@]}" -f "bv*[height<=720][vcodec^=avc1]/bv*[height<=720][vcodec!^=av01]/b[height<=720][vcodec!^=av01]" --no-part \
           -o "$OUT/원본영상/${VID}_720p.%(ext)s" "$URL" > "$vid_try" 2>&1; then

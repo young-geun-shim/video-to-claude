@@ -38,9 +38,8 @@ os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 try:
     import cv2  # noqa: E402
 except ImportError:
-    sys.stderr.write(
-        "cv2 없음 — python3 -m pip install --user -r requirements-ocr.txt\n"
-    )
+    _req = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "requirements-ocr.txt"))
+    sys.stderr.write(f"cv2 없음 — python3 -m pip install --user -r \"{_req}\"\n")
     sys.exit(1)
 import numpy as np  # noqa: E402
 
