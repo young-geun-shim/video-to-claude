@@ -5,7 +5,7 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-log() { echo "[fetch $(TZ=Asia/Seoul date '+%H:%M:%S KST')] $*"; }
+log() { echo "[fetch $(date '+%H:%M:%S %Z')] $*"; }
 
 WANT_VIDEO=0
 SAME_OK=0
@@ -93,11 +93,36 @@ log "yt-dlp = $YT ($("$YT" --version))"
 
 # 유튜브는 영상 주소를 풀 때 자바스크립트 실행기가 필요하다(2026-09-07 실측 = node 지정해야 받아짐)
 NODE="$(command -v node || true)"
-if [ -z "$NODE" ]; then
-  log "[오류] node 없음 — 유튜브 받기가 막힌다"
-  exit 1
+JS=()
+yt_host_rc=0
+python3 - "$URL" << 'PY' || yt_host_rc=$?
+import sys
+import urllib.parse
+
+url = sys.argv[1].strip()
+u = urllib.parse.urlparse(url)
+host = (u.netloc or "").lower()
+if host.startswith("www."):
+    host = host[4:]
+is_yt = host in (
+    "youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtube-nocookie.com",
+    "m.youtube-nocookie.com",
+    "youtu.be",
+) or host.endswith(".youtube.com") or host.endswith(".youtu.be")
+sys.exit(0 if is_yt else 1)
+PY
+if [ "$yt_host_rc" -eq 0 ]; then
+  if [ -z "$NODE" ]; then
+    log "[오류] node 없음 — 유튜브 받기가 막힌다"
+    exit 1
+  fi
+  JS=(--js-runtimes "node:$NODE")
+elif [ -n "$NODE" ]; then
+  JS=(--js-runtimes "node:$NODE")
 fi
-JS=(--js-runtimes "node:$NODE")
 
 mkdir -p "$OUT/원본자막"
 

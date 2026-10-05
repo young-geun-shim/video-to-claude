@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# 0단계에서 돌리는 점검. yt-dlp · ffmpeg · 파이썬에서 paddleocr · cv2 불러오기 · node · CPU 수를 한 줄씩 통과 또는 실패로 찍는다.
+# 0단계에서 돌리는 점검. 꼭 필요한 것은 yt-dlp · ffmpeg · python3다.
+# paddleocr · cv2 · faster-whisper · node 는 없으면 알림과 설치 안내만 찍고 종료 코드에는 영향 없다.
 # 쓰는 법: bash check_env.sh
-# paddleocr 를 못 부르면 ~/.cache/video-to-claude/pyfix 를 PYTHONPATH 앞에 넣고 한 번 더 본다.
-# 그래도 실패하면 ~/.local 은 건드리지 않는 고치는 명령을 안내하고 종료 코드 1 로 끝낸다.
 set -u
+
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SKILL_ROOT="$(cd "$HERE/.." && pwd)"
 
 failed=0
 pass() { echo "통과  $*"; }
@@ -33,28 +35,20 @@ else
   fail "ffmpeg 없음"
 fi
 
+if command -v python3 >/dev/null 2>&1; then
+  pass "python3 = $(command -v python3)"
+else
+  fail "python3 없음"
+fi
+
 ERR="$(mktemp /tmp/check_env_ocr.XXXXXX)"
 if python3 -c 'import paddleocr' >/dev/null 2>"$ERR"; then
   pass "paddleocr 불러오기"
+elif PYTHONPATH="${PYFIX}${PYTHONPATH:+:$PYTHONPATH}" python3 -c 'import paddleocr' >/dev/null 2>"$ERR"; then
+  pass "paddleocr 불러오기 — PYTHONPATH 에 ${PYFIX} 를 넣고 다시 불렀다"
 else
   last="$(tail -n 1 "$ERR" 2>/dev/null || true)"
-  # 여기서 failed 를 올리지 않는다. pyfix 로 다시 부르면 통과다. 다시 부르기도 실패할 때만 실패로 센다.
-  echo "실패  paddleocr 불러오기 — ${last:-불러오지 못했다}"
-  if PYTHONPATH="${PYFIX}${PYTHONPATH:+:$PYTHONPATH}" python3 -c 'import paddleocr' >/dev/null 2>"$ERR"; then
-    pass "paddleocr 불러오기 — PYTHONPATH 에 ${PYFIX} 를 넣고 다시 불렀다"
-  else
-    last="$(tail -n 1 "$ERR" 2>/dev/null || true)"
-    fail "paddleocr 불러오기 — ${PYFIX} 를 PYTHONPATH 에 넣어도 실패 — ${last:-불러오지 못했다}"
-    if printf '%s' "$last" | grep -q "No module named 'paddleocr'\|ModuleNotFoundError: .*paddleocr"; then
-      echo "paddleocr 자체가 없다. 설치 명령 = python3 -m pip install --user paddleocr paddlepaddle"
-    elif printf '%s' "$last" | grep -qi "urllib3\|requests"; then
-      echo "고치는 명령 = python3 -m pip install --target \"${PYFIX}\" 'urllib3>=2' requests"
-      echo "그 다음 = PYTHONPATH=\"${PYFIX}\" python3 -c 'import paddleocr'"
-      echo "사용자 파이썬 부품 폴더(~/.local)는 고치지 않는다."
-    else
-      echo "원인을 위 오류 줄에서 확인한다. paddleocr 가 없으면 python3 -m pip install --user paddleocr paddlepaddle, urllib3 계열 오류면 python3 -m pip install --target \"${PYFIX}\" 'urllib3>=2' requests 를 쓴다."
-    fi
-  fi
+  echo "알림  paddleocr 없음 — 화면 글자 인식을 할 때 필요하다. 설치 명령 = python3 -m pip install --user -r \"${SKILL_ROOT}/requirements-ocr.txt\"${last:+ — }${last}"
 fi
 rm -f "$ERR"
 
@@ -62,22 +56,21 @@ rm -f "$ERR"
 if python3 -c 'import cv2' >/dev/null 2>&1; then
   pass "cv2 불러오기"
 else
-  fail "cv2 불러오기 — 장면 뽑기와 화면 글자 인식을 못 한다"
-  echo "설치 명령 = python3 -m pip install --user opencv-python"
+  echo "알림  cv2 없음 — 장면 뽑기와 화면 글자 인식을 할 때 필요하다. 설치 명령 = python3 -m pip install --user -r \"${SKILL_ROOT}/requirements-ocr.txt\""
 fi
 
 # 소리 받아쓰기(transcribe.py)를 할 때만 필요하다. 없어도 실패로 세지 않는다(종료 코드에 영향 없음).
 if python3 -c 'import faster_whisper' >/dev/null 2>&1; then
   pass "faster-whisper 불러오기"
 else
-  echo "알림  faster-whisper 없음 — 소리 받아쓰기를 할 때만 필요하다. 설치 명령 = python3 -m pip install --user faster-whisper"
+  echo "알림  faster-whisper 없음 — 소리 받아쓰기를 할 때만 필요하다. 설치 명령 = python3 -m pip install --user -r \"${SKILL_ROOT}/requirements-whisper.txt\""
 fi
 
-# 유튜브는 영상 주소를 풀 때 자바스크립트 실행기가 필요하다(fetch.sh 가 node 를 넘긴다)
+# 유튜브 영상을 받을 때만 필요하다(fetch.sh 가 node 를 넘긴다). 없어도 종료 코드에는 영향 없다.
 if command -v node >/dev/null 2>&1; then
   pass "node = $(command -v node)"
 else
-  fail "node 없음 — 유튜브 받기가 막힌다"
+  echo "알림  node 없음 — 유튜브를 받을 때 필요하다"
 fi
 
 CPU="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || true)"

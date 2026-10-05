@@ -8,7 +8,10 @@
 #   --step·--diff 는 --screen-step·--screen-diff 와 같은 뜻(옛 명령 호환). --limit 시간 재기도 같은 값을 쓴다
 import argparse
 import difflib
-import fcntl
+try:
+    import fcntl
+except ImportError:
+    fcntl = None
 import json
 import logging
 import multiprocessing as mp
@@ -32,7 +35,13 @@ SAME_LINE_DEFAULT = 0.85
 from common import OCR_MARK, fmt, repeated_lines
 
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
-import cv2  # noqa: E402
+try:
+    import cv2  # noqa: E402
+except ImportError:
+    sys.stderr.write(
+        "cv2 없음 — python3 -m pip install --user -r requirements-ocr.txt\n"
+    )
+    sys.exit(1)
 import numpy as np  # noqa: E402
 
 
@@ -198,6 +207,9 @@ def settings_equal(saved, now):
 
 def acquire_lock(out):
     fh = open(out / LOCK_NAME, "a")
+    if fcntl is None:
+        sys.stderr.write("[알림] fcntl 없음 — 이 환경에서는 작업 폴더 잠금을 건너뛴다\n")
+        return fh
     try:
         fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
@@ -655,10 +667,11 @@ def run_ocr(args):
         return last_line
     finally:
         if lock_fh:
-            try:
-                fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
-            except OSError:
-                pass
+            if fcntl is not None:
+                try:
+                    fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
             lock_fh.close()
 
 

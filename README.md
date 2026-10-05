@@ -14,13 +14,15 @@ git clone https://github.com/young-geun-shim/video-to-claude.git "${CLAUDE_CONFI
 
 ## 필요한 프로그램
 
-- 늘 필요 = `yt-dlp` · `ffmpeg` · `node` · `python3`.
-- 화면 글자를 읽을 때만 = `paddleocr` · `opencv-python`(파이썬 패키지, 불러올 때 이름은 `cv2`).
-- 소리 받아쓰기(자막이 없는 영상)를 할 때만 = `faster-whisper`(파이썬 패키지).
+지원 환경 = bash 가 있는 리눅스 · 맥 · 윈도우 WSL. 윈도우 명령 프롬프트 · 파워셸만으로는 스크립트가 돌지 않습니다.
 
-자막 고르기의 사용자 언어는 `scripts/pick_langs.py` 의 `USER_LANG` 한 줄(기본 `"ko"`)이 정합니다. 한국어가 아닌 사용자는 그 줄을 자기 언어로 바꾸세요. 아래 개인 설정 파일은 스크립트가 아니라 클로드가 읽는 글이라 자막 고르기에는 걸리지 않습니다.
+- 자막만 받을 때 = `yt-dlp` · `ffmpeg` · `python3` (유튜브는 `node` 도).
+- 화면 글자 인식까지 = `python3 -m pip install --user -r "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/video-to-claude/requirements-ocr.txt"`
+- 소리 받아쓰기까지 = `python3 -m pip install --user -r "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/video-to-claude/requirements-whisper.txt"`
 
-설치 명령은 환경마다 다르므로 `scripts/check_env.sh` 를 먼저 돌려 빠진 것과 고치는 방법을 안내받으세요.
+자막 고르기의 사용자 언어는 환경 변수 `VIDEO_TO_CLAUDE_LANG`(예 `en`, `ja`, 기본 `ko`)으로 정합니다. 아래 개인 설정 파일은 스크립트가 아니라 클로드가 읽는 글이라 자막 고르기에는 걸리지 않습니다.
+
+설치 명령은 환경마다 다르므로 `scripts/check_env.sh` 를 먼저 돌려 빠진 것과 고치는 방법을 안내받으세요. `check_env.sh` 는 꼭 필요한 것이 없을 때만 실패하고, 화면 글자 인식 · 소리 받아쓰기 같은 선택 부품은 「알림」으로만 알립니다.
 
 ```bash
 bash "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/video-to-claude/scripts/check_env.sh"

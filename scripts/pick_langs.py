@@ -4,6 +4,7 @@
 # 원래 음성 언어는 formats 오디오 트랙 이름(예 Korean original (default))에서 찾는다.
 # 그 언어의 -orig 는 발화 원문, 다른 언어의 -orig 는 자동 더빙 받아쓰기다. ko·en 이 아닌 더빙은 받지 않는다.
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -14,8 +15,9 @@ from common import KIND_AUTO_TRANS, KIND_MANUAL  # noqa: E402
 KIND_SPEECH = "발화 원문"
 KIND_DUB = "자동 더빙 받아쓰기"
 DUB_KEEP = {"ko", "en"}
-# 사용자가 읽는 언어. 옵션은 없고 기본은 한국어다.
-USER_LANG = "ko"
+# 사용자가 읽는 언어. 환경 변수 VIDEO_TO_CLAUDE_LANG(앞뒤 공백 제거·소문자)이 있으면 그 값, 없으면 ko.
+_lang = (os.environ.get("VIDEO_TO_CLAUDE_LANG") or "").strip().lower()
+USER_LANG = _lang if _lang else "ko"
 
 
 def base(code):

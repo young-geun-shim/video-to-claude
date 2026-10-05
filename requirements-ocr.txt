@@ -1,0 +1,4 @@
+# 화면 글자 인식(screen_ocr.py)과 장면 뽑기용 OpenCV·PaddleOCR 부품 목록
+paddleocr==3.5.0
+paddlepaddle==3.3.1
+opencv-python==4.13.0.92
