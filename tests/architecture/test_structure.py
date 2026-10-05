@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 저장소 구조 규칙 네 가지를 검사하고 일부러 어긴 보기로 검사기를 확인한다
+# 저장소 구조 규칙 다섯 가지(규칙5 = 마크다운 코드 블록 여닫는 줄)를 검사하고 일부러 어긴 보기로 검사기를 확인한다
 """구조 규칙 시험. 통과 시 「구조 규칙 통과」를 출력하고 종료 코드 0."""
 
 from __future__ import annotations
@@ -259,12 +259,69 @@ def check_rule4_skill_frontmatter(root: Path) -> list[str]:
     return errors
 
 
+FENCE_LINE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+# 여는 줄 뒤 글 = 영문 언어 이름(c# · c++ 포함)으로 시작하면 그 뒤 설정 글(title="…")까지 허용한다.
+# 한글 문장처럼 언어 이름이 아닌 글로 시작하면 줄을 잘못 붙인 것으로 본다
+FENCE_LANG_RE = re.compile(r"[A-Za-z0-9+#._-]+(?:\s.*)?")
+
+
+def iter_md_files_all(root: Path) -> list[Path]:
+    # tests/ 와 .git/ 은 빼고 저장소의 모든 .md 를 모은다
+    found: list[Path] = []
+    for path in root.rglob("*.md"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if rel.parts and rel.parts[0] == "tests":
+            continue
+        if any(part in RULE3_SKIP_DIRS for part in rel.parts):
+            continue
+        found.append(path)
+    return sorted(found)
+
+
+def check_rule5_md_code_fences(root: Path) -> list[str]:
+    errors: list[str] = []
+    for path in iter_md_files_all(root):
+        rel = path.relative_to(root)
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        open_mark: str | None = None
+        open_line = 0
+        for no, line in enumerate(lines, start=1):
+            m = FENCE_LINE_RE.match(line)
+            if open_mark is None:
+                if not m:
+                    continue
+                rest = m.group(2).strip()
+                if rest and not FENCE_LANG_RE.fullmatch(rest):
+                    errors.append(
+                        f"규칙5 {rel}:{no}: 코드 블록 여는 줄 뒤에 글이 붙음"
+                    )
+                open_mark = m.group(1)
+                open_line = no
+                continue
+            # 블록 안 — 같은 종류 기호이고 여는 줄보다 짧지 않은 줄만 닫는 줄 후보로 본다.
+            # 더 짧은 줄(```` 블록 안의 ```bash 예시)은 내용이다
+            if not m or m.group(1)[0] != open_mark[0] or len(m.group(1)) < len(open_mark):
+                continue
+            if m.group(2).strip():
+                errors.append(
+                    f"규칙5 {rel}:{no}: 코드 블록 닫는 줄 뒤에 글이 붙음"
+                )
+                continue
+            open_mark = None
+        if open_mark is not None:
+            errors.append(f"규칙5 {rel}:{open_line}: 코드 블록이 닫히지 않음")
+    return errors
+
+
 def run_all_checks(root: Path) -> list[str]:
     errors: list[str] = []
     errors.extend(check_rule1_scripts_imports(root))
     errors.extend(check_rule2_file_references(root))
     errors.extend(check_rule3_no_personal_paths(root))
     errors.extend(check_rule4_skill_frontmatter(root))
+    errors.extend(check_rule5_md_code_fences(root))
     return errors
 
 
@@ -391,6 +448,37 @@ def run_negative_self_tests() -> None:
         shutil.copy(root / "README.md", troot / "README.md")
         (troot / "SKILL.md").write_text("# no frontmatter\n", encoding="utf-8")
         _assert_rule_errors(troot, "규칙4 머리막", 4, "규칙4 SKILL.md")
+
+    # 규칙5 일부러 어긴 보기 셋(닫는 줄 뒤 글 · 여는 줄 뒤 글 · 안 닫힘)
+    rule5_cases = [
+        ("규칙5 닫는 줄 뒤 글", "```bash\nx\n``` 붙은 글\n", "닫는 줄 뒤에 글이 붙음"),
+        ("규칙5 여는 줄 뒤 글", "``` 새 창에서 열기\nx\n```\n", "여는 줄 뒤에 글이 붙음"),
+        ("규칙5 안 닫힘", "```bash\nx\n", "닫히지 않음"),
+    ]
+    for case_label, bad_text, pattern_label in rule5_cases:
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            _copy_rule_fixtures(troot, root)
+            (troot / "leak.md").write_text(bad_text, encoding="utf-8")
+            _assert_rule_errors(troot, case_label, 5, pattern_label)
+
+    # 잡으면 안 되는 보기(언어 이름 붙은 정상 블록 · ~~~ 정상 블록)는 규칙5 오류가 없어야 한다
+    rule5_ok_cases = [
+        ("규칙5 허용 ```bash 블록", "```bash\necho hi\n```\n"),
+        ("규칙5 허용 ~~~ 블록", "~~~\n``` 안의 글\n~~~\n"),
+        ("규칙5 허용 ```` 블록 안 ```bash 예시", "````markdown\n```bash\nx\n```\n````\n"),
+        ("규칙5 허용 ```c# · ```bash title", "```c#\nx\n```\n\n```bash title=\"a\"\nx\n```\n"),
+    ]
+    for case_label, ok_text in rule5_ok_cases:
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            _copy_rule_fixtures(troot, root)
+            (troot / "leak.md").write_text(ok_text, encoding="utf-8")
+            extra = [e for e in run_all_checks(troot) if e.startswith("규칙5")]
+            if extra:
+                raise AssertionError(
+                    f"허용해야 할 보기({case_label})인데 규칙5 오류 — {extra!r}"
+                )
 
 
 def main() -> None:
