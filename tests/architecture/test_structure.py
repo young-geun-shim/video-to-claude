@@ -194,7 +194,8 @@ def _rule3_patterns() -> list[tuple[str, re.Pattern[str]]]:
     win_users_bs = "C:" + "\\" + "Users" + "\\"
     gmail = "@" + "gmail.com"
     return [
-        ("개인 홈 경로", re.compile(r"/home/[^/\s<>]+/")),
+        # 이름 뒤에 / 가 없어도(/home/이름 으로 끝나도) 잡는다. 꺾쇠 자리 표시 /home/<...> 는 뺀다
+        ("개인 홈 경로", re.compile(r"/home/(?!<)[A-Za-z0-9._-]+")),
         ("WSL 사용자 경로", re.compile(mnt_users)),
         ("Windows 사용자 경로(역슬래시)", re.compile(re.escape(win_users_bs), re.IGNORECASE)),
         ("Windows 사용자 경로(슬래시)", re.compile(r"[cC]:/Users/", re.IGNORECASE)),
@@ -321,6 +322,7 @@ def run_negative_self_tests() -> None:
 
     rule3_cases = [
         ("규칙3 개인 홈", "/home/someuser/leak\n", "개인 홈 경로"),
+        ("규칙3 개인 홈(끝 슬래시 없음)", "경로 /home/someuser 끝\n", "개인 홈 경로"),
         (
             "규칙3 WSL",
             "/" + "mnt" + "/c/Users/x/leak\n",
