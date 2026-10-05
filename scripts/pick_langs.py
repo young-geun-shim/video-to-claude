@@ -15,8 +15,8 @@ from common import KIND_AUTO_TRANS, KIND_MANUAL  # noqa: E402
 KIND_SPEECH = "발화 원문"
 KIND_DUB = "자동 더빙 받아쓰기"
 DUB_KEEP = {"ko", "en"}
-# 사용자가 읽는 언어. 환경 변수 VIDEO_TO_CLAUDE_LANG(앞뒤 공백 제거·소문자, ko-KR 같은 지역 꼴은 앞 두 글자 ko)이 있으면 그 값, 없으면 ko.
-_lang = (os.environ.get("VIDEO_TO_CLAUDE_LANG") or "").strip().lower().split("-")[0]
+# 사용자가 읽는 언어. 환경 변수 VIDEO_TO_CLAUDE_LANG(앞뒤 공백 제거·소문자, ko-KR · ja_JP 같은 지역 꼴은 앞부분 ko · ja)이 있으면 그 값, 없으면 ko.
+_lang = (os.environ.get("VIDEO_TO_CLAUDE_LANG") or "").strip().lower().replace("_", "-").split("-")[0]
 USER_LANG = _lang if _lang else "ko"
 
 
@@ -136,8 +136,9 @@ def main():
                 if base(code) in want:
                     picked.setdefault(code, KIND_SPEECH)
         else:
+            # 원래 음성 언어도 영상 언어도 모르면 사용자 언어가 아닌 첫 자동 자막을 발화 원문으로 본다(사용자 언어 쪽은 자동 번역일 수 있다).
             for code in auto:
-                if base(code) != "ko":
+                if base(code) != USER_LANG:
                     picked.setdefault(code, KIND_SPEECH)
                     break
 
