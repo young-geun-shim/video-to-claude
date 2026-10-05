@@ -11,9 +11,9 @@ description: 영상(여러 개도)의 말과 화면 글자를 한 줄도 빼지 
 
 ## 필요한 프로그램
 
-- 늘 필요 = `yt-dlp` · `ffmpeg` · `node` · `python3`.
-- 화면 글자를 읽을 때만 = `paddleocr` · `opencv-python`(불러올 때 이름은 `cv2`).
-- 소리 받아쓰기를 할 때만 = `faster-whisper`.
+- 늘 필요 = `yt-dlp` · `ffmpeg` · `python3`. 유튜브를 받을 때는 `node` 도.
+- 화면 글자를 읽을 때만 = 스킬 폴더의 `requirements-ocr.txt`(`paddleocr` · `opencv-python` 등, 불러올 때 이름은 `cv2`).
+- 소리 받아쓰기를 할 때만 = 스킬 폴더의 `requirements-whisper.txt`(`faster-whisper`).
 - 처음엔 `scripts/check_env.sh` 로 점검한다. 영상을 받기 전에는 `yt-dlp` 가 있는지만 가볍게 보고, 글자 인식과 소리 받아쓰기 점검은 그 일이 필요해질 때만 한다.
 
 ## 지키는 것
