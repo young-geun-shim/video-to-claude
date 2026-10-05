@@ -260,7 +260,9 @@ def check_rule4_skill_frontmatter(root: Path) -> list[str]:
 
 
 FENCE_LINE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
-FENCE_LANG_RE = re.compile(r"[A-Za-z0-9+\-_]+")
+# 여는 줄 뒤 글 = 영문 언어 이름(c# · c++ 포함)으로 시작하면 그 뒤 설정 글(title="…")까지 허용한다.
+# 한글 문장처럼 언어 이름이 아닌 글로 시작하면 줄을 잘못 붙인 것으로 본다
+FENCE_LANG_RE = re.compile(r"[A-Za-z0-9+#._-]+(?:\s.*)?")
 
 
 def iter_md_files_all(root: Path) -> list[Path]:
@@ -465,6 +467,7 @@ def run_negative_self_tests() -> None:
         ("규칙5 허용 ```bash 블록", "```bash\necho hi\n```\n"),
         ("규칙5 허용 ~~~ 블록", "~~~\n``` 안의 글\n~~~\n"),
         ("규칙5 허용 ```` 블록 안 ```bash 예시", "````markdown\n```bash\nx\n```\n````\n"),
+        ("규칙5 허용 ```c# · ```bash title", "```c#\nx\n```\n\n```bash title=\"a\"\nx\n```\n"),
     ]
     for case_label, ok_text in rule5_ok_cases:
         with tempfile.TemporaryDirectory() as tmp:
