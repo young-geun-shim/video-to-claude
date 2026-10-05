@@ -4,7 +4,13 @@
 
 ## 설치
 
-이 폴더(`video-to-claude/`)를 통째로 클로드 설정 폴더의 `skills/` 아래에 넣습니다. 보통 `~/.claude/skills/video-to-claude/` 입니다. 새 창에서 스킬 목록에 `video-to-claude` 가 보이면 설치된 것입니다.
+클로드 설정 폴더(보통 `~/.claude`, `CLAUDE_CONFIG_DIR` 를 쓰면 그 폴더)의 `skills/` 아래로 받습니다.
+
+```bash
+git clone https://github.com/young-geun-shim/video-to-claude.git "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/video-to-claude"
+```
+
+새 창에서 스킬 목록에 `video-to-claude` 가 보이면 설치된 것입니다. 새 버전은 그 폴더에서 `git pull` 로 받습니다. 같은 이름의 폴더가 이미 있으면 `git clone` 이 멈추니, 그 폴더를 다른 곳으로 옮긴 뒤 다시 받으세요. git 을 쓰지 않으면 이 저장소 파일을 통째로 `skills/video-to-claude/` 에 넣어도 됩니다.
 
 ## 필요한 프로그램
 
