@@ -1,0 +1,25 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python syntax
+        run: python3 -m py_compile scripts/*.py
+      - name: Shell syntax
+        run: |
+          for f in scripts/*.sh; do
+            bash -n "$f"
+          done
+      - name: Architecture rules
+        run: python3 tests/architecture/test_structure.py
