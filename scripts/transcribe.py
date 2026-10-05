@@ -21,7 +21,8 @@ VIDEO_EXT = {".mp4", ".mkv", ".webm", ".mov", ".m4v", ".avi", ".mp3", ".m4a", ".
 
 
 def kst():
-    return time.strftime("%H:%M:%S KST", time.gmtime(time.time() + 9 * 3600))
+    # 이 컴퓨터의 시간대로 찍는다(받기 스크립트 fetch.sh 와 같은 기준)
+    return time.strftime("%H:%M:%S %Z")
 
 
 def log(msg):
