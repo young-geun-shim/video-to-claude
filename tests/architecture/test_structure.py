@@ -193,13 +193,19 @@ def _rule3_patterns() -> list[tuple[str, re.Pattern[str]]]:
     mnt_users = "/" + "mnt" + "/c/Users/"
     win_users_bs = "C:" + "\\" + "Users" + "\\"
     gmail = "@" + "gmail.com"
+    ic = re.IGNORECASE
     return [
-        # 이름 뒤에 / 가 없어도(/home/이름 으로 끝나도) 잡는다. 꺾쇠 자리 표시 /home/<...> 는 뺀다
-        ("개인 홈 경로", re.compile(r"/home/(?!<)[A-Za-z0-9._-]+")),
-        ("WSL 사용자 경로", re.compile(mnt_users)),
-        ("Windows 사용자 경로(역슬래시)", re.compile(re.escape(win_users_bs), re.IGNORECASE)),
-        ("Windows 사용자 경로(슬래시)", re.compile(r"[cC]:/Users/", re.IGNORECASE)),
-        ("gmail 주소", re.compile(re.escape(gmail))),
+        # 슬래시 묶음(/ · // · ///) 바로 뒤 home/ 을 잡는다. 슬래시 묶음 앞 글자가 영숫자 . _ - 이면
+        # 다른 경로나 주소의 일부(/opt/home/ · example.com/home/)라 뺀다. 이름 자리는 한글 포함 아무 글자
+        # (공백 / < 제외)라 이름 뒤에 / 가 없어도 잡고, 꺾쇠 자리 표시 /home/<...> 는 뺀다. 대소문자는 무시한다
+        (
+            "개인 홈 경로",
+            re.compile(r"(?<![A-Za-z0-9._/-])/+home/[^\s/<]+", ic),
+        ),
+        ("WSL 사용자 경로", re.compile(re.escape(mnt_users), ic)),
+        ("Windows 사용자 경로(역슬래시)", re.compile(re.escape(win_users_bs), ic)),
+        ("Windows 사용자 경로(슬래시)", re.compile(r"[cC]:/Users/", ic)),
+        ("gmail 주소", re.compile(re.escape(gmail), ic)),
     ]
 
 
@@ -323,6 +329,9 @@ def run_negative_self_tests() -> None:
     rule3_cases = [
         ("규칙3 개인 홈", "/home/someuser/leak\n", "개인 홈 경로"),
         ("규칙3 개인 홈(끝 슬래시 없음)", "경로 /home/someuser 끝\n", "개인 홈 경로"),
+        ("규칙3 개인 홈(허락 규칙 꼴 //home)", "Read(//home/someuser/.claude/x.md)\n", "개인 홈 경로"),
+        ("규칙3 개인 홈(file:///home)", "file:///home/someuser/x\n", "개인 홈 경로"),
+        ("규칙3 개인 홈(콜론 뒤)", "예:/home/someuser\n", "개인 홈 경로"),
         (
             "규칙3 WSL",
             "/" + "mnt" + "/c/Users/x/leak\n",
@@ -335,6 +344,20 @@ def run_negative_self_tests() -> None:
         ),
         ("규칙3 Windows 슬래시", "C:/Users/x/leak\n", "Windows 사용자 경로(슬래시)"),
         ("규칙3 gmail", "contact" + "@gmail.com\n", "gmail 주소"),
+        ("규칙3 한글 이름 홈", "/home/영근/leak\n", "개인 홈 경로"),
+        ("규칙3 대문자 Home", "/Home/someuser\n", "개인 홈 경로"),
+        (
+            "규칙3 WSL 소문자",
+            "/" + "mnt" + "/c/users/x/leak\n",
+            "WSL 사용자 경로",
+        ),
+        ("규칙3 gmail 대소문자", "contact" + "@Gmail.com\n", "gmail 주소"),
+        ("규칙3 Windows 소문자 슬래시", "c:/users/young\n", "Windows 사용자 경로(슬래시)"),
+        (
+            "규칙3 Windows 역슬래시 young",
+            "C:" + "\\" + "Users\\young\n",
+            "Windows 사용자 경로(역슬래시)",
+        ),
     ]
     for case_label, leak_text, pattern_label in rule3_cases:
         with tempfile.TemporaryDirectory() as tmp:
@@ -342,6 +365,24 @@ def run_negative_self_tests() -> None:
             _copy_rule_fixtures(troot, root)
             (troot / "leak.md").write_text(leak_text, encoding="utf-8")
             _assert_rule_errors(troot, case_label, 3, pattern_label)
+
+    # 잡으면 안 되는 보기(주소 안 /home/ · 경로 조각 · 꺾쇠 자리 표시)는 규칙3 오류가 없어야 한다
+    rule3_ok_cases = [
+        ("규칙3 허용 주소 안 home", "https://example.com/home/docs\n"),
+        ("규칙3 허용 경로 조각 home", "/opt/home/someuser\n"),
+        ("규칙3 허용 꺾쇠 자리 표시", "Read(//home/<사용자 이름>/.claude/x.md)\n"),
+        ("규칙3 허용 꺾쇠 자리 표시(슬래시 하나)", "경로 /home/<사용자 이름>/x\n"),
+    ]
+    for case_label, ok_text in rule3_ok_cases:
+        with tempfile.TemporaryDirectory() as tmp:
+            troot = Path(tmp)
+            _copy_rule_fixtures(troot, root)
+            (troot / "leak.md").write_text(ok_text, encoding="utf-8")
+            extra = [e for e in run_all_checks(troot) if e.startswith("규칙3")]
+            if extra:
+                raise AssertionError(
+                    f"허용해야 할 보기({case_label})인데 규칙3 오류 — {extra!r}"
+                )
 
     with tempfile.TemporaryDirectory() as tmp:
         troot = Path(tmp)
